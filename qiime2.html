@@ -1,0 +1,62 @@
+<h2>Pipeline Análisis bioinformático utilizando qiime2</h2>
+<h3>Paso 1.-</h3>
+<p><strong>1.-</strong> Extraer los archivos obtenidos de la secuenciación (<em>R1</em> y <em>R2</em>) de sus respectivas carpetas y pasarlos a formato de <strong>qiime2</strong> con el siguiente código:</p>
+<pre><code>qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]' --input-path carpeta_con_archivos --input-format CasavaOneEightSingleLanePerSampleDirFmt --output-path nombre_archivos.qza
+</code></pre>
+<p>Estos parametros son para archivos <em>Paired End</em>.
+También genera el archivo de metadatos con extensión .tsv. Sigue las instrucciones que vienen en <strong>Qiime2</strong> para hacer tu archivo de metadatos.</p>
+<p><strong>1.2-</strong> Crear un archivo con extensión <em>.qzv</em> para visualizar la calidad</p>
+<pre><code>qiime demux summarize --i-data 16s-paired-end.qza --o-visualization 16s-paired-end.qzv 
+</code></pre>
+<p>**1.3-**Para visualizar archivos con extensión <em>.qzv</em> se usa el siguiente código:</p>
+<pre><code>qiime tools view nombre_archivo.qzv
+</code></pre>
+<h3>Paso 2.- Filtrado y limpieza de secuencias con DADA2</h3>
+<p><strong>2.1-</strong> Usamos el plugin dada2 y la función denoise-paired para la limpieza de las secuencias. Como argumentos usamos el archivo de entrada (donde estan las secuencias) y si queremos que corte al principio de las secuencias (--p-trim-left-f y --p-trim-left-r) y al final de las secuencias (--p-trunc-len-f y --p-trunc-len-r). Esta función nos genera 3 archivos de salida: rep-seqs.qza,  table.qza y stats.qza. Adicionalmente podemos agregar el argumento --p-chimera-method y especificar si queremos que quite las quimeras o no ('none').</p>
+<pre><code>qiime dada2 denoise-paired --i-demultiplexed-seqs its_cucu.qza --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f 240 --p-trunc-len-r 240 --o-representative-sequences rep-seqs.qza --o-table table.qza --o-denoising-stats stats.qza
+</code></pre>
+<p>creamos el archivo de visualización de las <em>estadisticas</em>:</p>
+<pre><code>qiime metadata tabulate --m-input-file stats.qza --o-visualization stats.qzv
+</code></pre>
+<p>creamos el archivo de visualización de la <em>tabla</em>:</p>
+<pre><code>qiime feature-table summarize --i-table table.qza --o-visualization table.qzv --m-sample-metadata-file metadata.tsv
+</code></pre>
+<p>creamos el archivo de visualización de las <em>secuencias representativas</em>:</p>
+<pre><code>qiime feature-table tabulate-seqs --i-data rep-seqs.qza --o-visualization rep-seqs.qzv
+</code></pre>
+<h3>Paso 3 Clusterización</h3>
+<p><strong>3.1-</strong> clusterizamos las features para obtener las secuencias representativas, usando el metodo <em>de novo</em> con un porcentaje de identidad de 97%.</p>
+<pre><code>qiime vsearch cluster-features-de-novo --i-sequences rep-seqs.qza --i-table table.qza --p-perc-identity 0.97 --p-threads 20 --o-clustered-table table-cluster-de-novo.qza --o-clustered-sequences seqs-cluster-de-novo.qza
+</code></pre>
+<h3>Paso 4 Generar arbol para análisis de diversidad filogenética</h3>
+<p>El archivo de salida rooted-tree.qza nos va a servir despues para construir el objeto phyloseq para trabajar en R.</p>
+<pre><code>qiime phylogeny align-to-tree-mafft-fasttree --i-sequences rep-seqs.qza --o-alignment aligned-rep-seqs.qza --o-masked-alignment masked-aligned-rep-seqs.qza --o-tree unrooted-tree.qza --o-rooted-tree rooted-tree.qza
+</code></pre>
+<h3>Paso 5 Análisis de diversidad</h3>
+<pre><code>qiime diversity core-metrics-phylogenetic --i-phylogenys rooted-tree.qza --i-table table.qza --p-sampling-depth 1922 --m-metadata-file metadata.tsv --output-dir core-metrics-results
+</code></pre>
+<h3>Paso 6 Análisis taxonomico</h3>
+<p><strong>5.1-</strong> Realizamos la asignación taxonomica usando alguna de las diferentes bases de datos que podemos obtener. En este ejemplo usamos la base de silva para la región hipervariable V4 del 16s:</p>
+<pre><code>qiime feature-classifier classify-sklearn --i-classifier silva-138-99-515-806-nb-classifier.qza --i-reads rep-seqs-dada2.qza --o-classification taxonomy-silva.qza
+</code></pre>
+<p><strong>5.2-</strong> Creamos el archivo de visualización de la taxonomía:</p>
+<pre><code>qiime metadata tabulate --m-input-file taxonomy.qza --o-visualization taxonomy.qzv
+</code></pre>
+<p><strong>5.3-</strong> Creamos un archivo de visualización de la taxonomia en forma de gráfica de barras:</p>
+<pre><code>qiime taxa barplot --i-table table-dada2.qza --i-taxonomy taxonomy-gg.qza --m-metadata-file 16s_metadata.tsv --o-visualization taxa-bar-plots.qzv
+</code></pre>
+<h2>Anexos</h2>
+<p>Con este comando excluyo del archivo de taxonomia aquellos secuencias que el <em>Phylum</em> quedó como sin identificar:</p>
+<pre><code>qiime taxa filter-seqs --i-sequences rep-seqs.qza --i-taxonomy taxonomy_quimeras.qza --p-include p__ --p-exclude unidentified --o-filtered-sequences sequences-sin-unidentified.qza
+</code></pre>
+<p>Con este comando excluyo especificamente aquellas secuencias que el clasificador asigno que pertenecian a mitocondrias y cloroplastos:</p>
+<pre><code>qiime taxa filter-seqs --i-sequences sequences.qza --i-taxonomy taxonomy.qza --p-include p__ --p-exclude mitochondria,chloroplast --o-filtered-sequences sequences-with-phyla-no-mitochondria-no-chloroplast.qza
+</code></pre>
+<pre><code>qiime taxa filter-table --i-table table.qza --i-taxonomy taxonomy.qza --p-include p__ --p-exclude mitochondria,chloroplast --o-filtered-table table-with-phyla-no-mitochondria-no-chloroplast.qza
+</code></pre>
+<p>Con este comando excluyo aquellos ASV que tienen menos de 10 secuencias de respaldo:</p>
+<pre><code>qiime feature-table filter-features --i-table table.qza --p-min-frequency 10 --o-filtered-table feature-frecuency-filtered-table.qza
+</code></pre>
+<p>Con este comando excluyo aquellos ASV que tienen menos de 10 secuencias de respaldo:</p>
+<pre><code>qiime feature-table filter-seqs --i-data rep-seqs.qza --i-table table.qza --p-min-frequency 10 --o-filtered-data 
+</code></pre>
