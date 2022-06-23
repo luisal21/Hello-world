@@ -8,3 +8,17 @@ qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]'
 --input-format CasavaOneEightSingleLanePerSampleDirFmt 
 --output-path nombre_archivos.qza
 ```
+
+Crear un archivo con extensión *.qzv* para visualizar la calidad
+```
+qiime demux summarize --i-data nombre_archivo.qza --o-visualization nombre_archivo.qzv 
+```
+
+Para visualizar archivos con extensión *.qzv* se usa el siguiente código:
+
+```
+qiime tools view nombre_archivo.qzv
+```
+
+
+
