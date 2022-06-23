@@ -1,1 +1,10 @@
 #### pipeline qiime2
+
+pasar los archivos fastq.gz a formato de qiime2, archivos con extensión .qza
+
+```
+qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]' 
+--input-path carpeta_con_archivos 
+--input-format CasavaOneEightSingleLanePerSampleDirFmt 
+--output-path nombre_archivos.qza
+```
